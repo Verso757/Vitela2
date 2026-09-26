@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { auth, db } from "../lib/firebase";
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
@@ -34,6 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Process redirect result if coming back from signInWithRedirect
+    getRedirectResult(auth).catch((err) => {
+      console.warn("getRedirectResult info/error:", err);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
@@ -113,13 +120,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
+    // Check if running in a standalone PWA or mobile browser where popups might fail
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
+
     try {
-      const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user' || error.name === 'FirebaseError') {
-        throw new Error("popup-closed");
+      console.error("Firebase auth error:", error);
+      // If popup was blocked or in standalone PWA, attempt redirect
+      if (error.code === "auth/popup-blocked" || (isStandalone && error.code === "auth/cancelled-popup-request")) {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectErr) {
+          throw redirectErr;
+        }
       }
+      // Rethrow original error with intact error.code and details
       throw error;
     }
   };

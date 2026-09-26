@@ -107,16 +107,42 @@ export default function DashboardLayout() {
               <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden mr-2 text-slate-600" />}>
                   <Menu className="h-5 w-5" />
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0">
-                <div className="p-6 flex items-center gap-3 border-b border-slate-100">
-                  <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm">
-                    <Activity className="h-6 w-6" />
+              <SheetContent side="left" className="w-72 p-0 flex flex-col justify-between">
+                <div>
+                  <div className="p-6 flex items-center gap-3 border-b border-slate-100">
+                    <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm">
+                      <Activity className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <span className="text-xl font-bold tracking-tight text-slate-900 block leading-tight">Vitela</span>
+                      <span className="text-[11px] text-slate-400 font-medium">Clínica & Expediente</span>
+                    </div>
                   </div>
-                  <span className="text-xl font-bold tracking-tight">Vitela</span>
+                  <nav className="px-4 space-y-1 mt-4">
+                    <NavLinks onClick={() => setSidebarOpen(false)} />
+                  </nav>
                 </div>
-                <nav className="px-4 space-y-1 mt-4">
-                  <NavLinks onClick={() => setSidebarOpen(false)} />
-                </nav>
+
+                <div className="p-4 border-t border-slate-100 bg-slate-50/70">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Avatar className="h-9 w-9 border border-slate-200 shadow-sm bg-blue-100 text-blue-700">
+                      <AvatarFallback className="font-semibold text-xs">{user?.avatarInitials}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="text-sm font-semibold text-slate-900 truncate">{user?.name}</span>
+                      <span className="text-xs text-slate-500 truncate capitalize">{user?.role === "owner" ? "Propietario / Admin" : user?.role}</span>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 justify-center gap-2"
+                    onClick={() => { setSidebarOpen(false); handleLogout(); }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Cerrar Sesión
+                  </Button>
+                </div>
               </SheetContent>
             </Sheet>
 
@@ -139,11 +165,35 @@ export default function DashboardLayout() {
               <Settings className="h-5 w-5" />
             </Button>
             
-            {/* Mobile Profil avatar */}
-            <div className="md:hidden ml-2">
-               <Avatar className="h-8 w-8 border border-slate-100 shadow-sm bg-blue-100 text-blue-700">
-                 <AvatarFallback className="font-semibold text-xs">{user?.avatarInitials}</AvatarFallback>
-               </Avatar>
+            {/* Mobile Profile avatar */}
+            <div className="md:hidden ml-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center p-1 rounded-full hover:bg-slate-100 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                  <Avatar className="h-8 w-8 border border-slate-200 shadow-sm bg-blue-100 text-blue-700">
+                    <AvatarFallback className="font-semibold text-xs">{user?.avatarInitials}</AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-slate-200">
+                  <DropdownMenuLabel>
+                    <div className="font-semibold text-slate-900 truncate">{user?.name}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 truncate capitalize">{user?.role === "owner" ? "Propietario / Admin" : user?.role}</div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/configuracion")}>
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    <span>Perfil y Ajustes</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/configuracion")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Configuración</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Cerrar Sesión</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
