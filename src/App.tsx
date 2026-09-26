@@ -13,6 +13,7 @@ import Inventario from "./pages/Inventario";
 import Leads from "./pages/Leads";
 import Login from "./pages/Login";
 import Landing from "./pages/Landing";
+import AdminMaster from "./pages/AdminMaster";
 import PortalPaciente from "./pages/PortalPaciente";
 import RecetaPrint from "./pages/RecetaPrint";
 import TicketPrint from "./pages/TicketPrint";
@@ -45,6 +46,8 @@ export default function App() {
             <Route path="reportes" element={<Reportes />} />
             <Route path="configuracion" element={<Configuracion />} />
             <Route path="prospectos" element={<Leads />} />
+            <Route path="admin" element={<AdminMaster />} />
+            <Route path="superadmin" element={<Navigate to="/admin" replace />} />
           </Route>
           
           <Route path="/reserva/:doctorId" element={<ReservaPublica />} />

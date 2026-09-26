@@ -7,7 +7,15 @@
       "properties": {
         "name": { "type": "string" },
         "ownerId": { "type": "string" },
-        "contactEmail": { "type": "string" }
+        "contactEmail": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "doctorPhone": { "type": "string" },
+        "specialty": { "type": "string" },
+        "plan": { "type": "string" },
+        "planStatus": { "type": "string" },
+        "planRenewsAt": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
       },
       "required": ["name", "ownerId", "contactEmail"]
     },

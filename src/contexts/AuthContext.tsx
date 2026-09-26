@@ -9,9 +9,9 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from "firebase/auth";
-import { doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
+import { doc, getDoc, setDoc, writeBatch, collection, query, where, getDocs } from "firebase/firestore";
 
-export type Role = "owner" | "doctor" | "assistant" | "admin";
+export type Role = "owner" | "doctor" | "assistant" | "admin" | "superadmin";
 
 export interface User {
   id: string;
@@ -20,6 +20,8 @@ export interface User {
   role: Role;
   avatarInitials: string;
   clinicId: string;
+  originalClinicId?: string;
+  isSuperAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -27,13 +29,37 @@ interface AuthContextType {
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  isSuperAdmin: boolean;
+  activeClinicId: string | null;
+  activeClinicName: string | null;
+  isImpersonating: boolean;
+  switchClinic: (clinicId: string, clinicName?: string) => void;
+  resetToMyClinic: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export const SUPER_ADMIN_EMAILS = [
+  "jrafael.garcia757@gmail.com",
+  "koferosgroup@gmail.com"
+];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [impersonatedClinicId, setImpersonatedClinicId] = useState<string | null>(() => {
+    return localStorage.getItem("vitela_impersonated_clinic_id") || null;
+  });
+  const [impersonatedClinicName, setImpersonatedClinicName] = useState<string | null>(() => {
+    return localStorage.getItem("vitela_impersonated_clinic_name") || null;
+  });
+
+  const checkIsSuperAdmin = (email?: string | null) => {
+    if (!email) return false;
+    return SUPER_ADMIN_EMAILS.some(
+      (adminEmail) => adminEmail.toLowerCase() === email.toLowerCase()
+    );
+  };
 
   useEffect(() => {
     // Process redirect result if coming back from signInWithRedirect
@@ -46,64 +72,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const userDocRef = doc(db, "users", firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
+          const isTargetAdmin = checkIsSuperAdmin(firebaseUser.email);
 
           if (userDoc.exists()) {
             const data = userDoc.data();
             let finalRole = data.role as Role;
-            const ADMIN_EMAILS = [
-              "jrafael.garcia757@gmail.com",
-              "koferosgroup@gmail.com"
-            ];
-            const isTargetAdmin = ADMIN_EMAILS.some(
-              (adminEmail) => adminEmail.toLowerCase() === (data.email || "").toLowerCase()
-            );
 
             if (isTargetAdmin && data.role !== "owner") {
               finalRole = "owner";
               await setDoc(userDocRef, { role: "owner" }, { merge: true });
             }
+
+            const baseClinicId = data.clinicId || firebaseUser.uid;
+            const currentEffectiveClinicId = (isTargetAdmin && impersonatedClinicId) ? impersonatedClinicId : baseClinicId;
+
             setUser({
               id: firebaseUser.uid,
-              name: data.name,
-              email: data.email,
+              name: data.name || firebaseUser.displayName || "Usuario",
+              email: data.email || firebaseUser.email,
               role: isTargetAdmin ? "owner" : finalRole,
-              clinicId: data.clinicId,
+              clinicId: currentEffectiveClinicId,
+              originalClinicId: baseClinicId,
+              isSuperAdmin: isTargetAdmin,
               avatarInitials: data.name ? data.name.substring(0, 2).toUpperCase() : "DR"
             });
           } else {
-            // New user! Create a clinic for them and set them as owner.
-            const batch = writeBatch(db);
-            
-            const clinicRef = doc(db, "clinics", firebaseUser.uid); // Use uid as clinic id for simplicity for single-owner clinics
-            batch.set(clinicRef, {
-              name: `Clínica de ${firebaseUser.displayName || 'Doctor'}`,
-              ownerId: firebaseUser.uid,
-              contactEmail: firebaseUser.email
-            });
+            // New user! Check if a clinic was already pre-created for this email by SuperAdmin
+            const userEmailClean = firebaseUser.email.toLowerCase();
+            let assignedClinicId = firebaseUser.uid;
+            let clinicName = `Clínica de ${firebaseUser.displayName || 'Doctor'}`;
 
-            const memberRef = doc(db, "clinics", firebaseUser.uid, "members", firebaseUser.uid);
+            try {
+              const matchedClinicsSnap = await getDocs(
+                query(collection(db, "clinics"), where("contactEmail", "==", userEmailClean))
+              );
+
+              if (!matchedClinicsSnap.empty) {
+                const matchedClinic = matchedClinicsSnap.docs[0];
+                assignedClinicId = matchedClinic.id;
+                clinicName = matchedClinic.data().name || clinicName;
+              }
+            } catch (err) {
+              console.warn("Could not query pre-existing clinics by email:", err);
+            }
+
+            const batch = writeBatch(db);
+
+            // If it's a completely new clinic, create it
+            if (assignedClinicId === firebaseUser.uid) {
+              const clinicRef = doc(db, "clinics", firebaseUser.uid);
+              batch.set(clinicRef, {
+                name: clinicName,
+                ownerId: firebaseUser.uid,
+                contactEmail: firebaseUser.email,
+                doctorName: firebaseUser.displayName || "Doctor Titular",
+                plan: "Pro",
+                planStatus: "active",
+                createdAt: new Date().toISOString()
+              });
+            }
+
+            const memberRef = doc(db, "clinics", assignedClinicId, "members", firebaseUser.uid);
             batch.set(memberRef, {
               role: "owner",
               email: firebaseUser.email,
               name: firebaseUser.displayName || firebaseUser.email.split('@')[0]
-            });
+            }, { merge: true });
 
             batch.set(userDocRef, {
-              clinicId: firebaseUser.uid,
+              clinicId: assignedClinicId,
               role: "owner",
               email: firebaseUser.email,
               name: firebaseUser.displayName || firebaseUser.email.split('@')[0]
-            });
+            }, { merge: true });
 
             await batch.commit();
 
+            const currentEffectiveClinicId = (isTargetAdmin && impersonatedClinicId) ? impersonatedClinicId : assignedClinicId;
+
             setUser({
-               id: firebaseUser.uid,
-               name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-               email: firebaseUser.email,
-               role: "owner",
-               clinicId: firebaseUser.uid,
-               avatarInitials: (firebaseUser.displayName || firebaseUser.email).substring(0, 2).toUpperCase()
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+              email: firebaseUser.email,
+              role: "owner",
+              clinicId: currentEffectiveClinicId,
+              originalClinicId: assignedClinicId,
+              isSuperAdmin: isTargetAdmin,
+              avatarInitials: (firebaseUser.displayName || firebaseUser.email).substring(0, 2).toUpperCase()
             });
           }
         } catch (error) {
@@ -117,7 +172,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [impersonatedClinicId]);
+
+  const switchClinic = (clinicId: string, clinicName?: string) => {
+    localStorage.setItem("vitela_impersonated_clinic_id", clinicId);
+    if (clinicName) {
+      localStorage.setItem("vitela_impersonated_clinic_name", clinicName);
+      setImpersonatedClinicName(clinicName);
+    } else {
+      setImpersonatedClinicName(null);
+      localStorage.removeItem("vitela_impersonated_clinic_name");
+    }
+    setImpersonatedClinicId(clinicId);
+
+    if (user) {
+      setUser({
+        ...user,
+        clinicId: clinicId
+      });
+    }
+  };
+
+  const resetToMyClinic = () => {
+    localStorage.removeItem("vitela_impersonated_clinic_id");
+    localStorage.removeItem("vitela_impersonated_clinic_name");
+    setImpersonatedClinicId(null);
+    setImpersonatedClinicName(null);
+
+    if (user && user.originalClinicId) {
+      setUser({
+        ...user,
+        clinicId: user.originalClinicId
+      });
+    }
+  };
 
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
@@ -145,11 +233,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    localStorage.removeItem("vitela_impersonated_clinic_id");
+    localStorage.removeItem("vitela_impersonated_clinic_name");
+    setImpersonatedClinicId(null);
+    setImpersonatedClinicName(null);
     await signOut(auth);
   };
 
+  const isSuperAdmin = user ? checkIsSuperAdmin(user.email) : false;
+  const isImpersonating = Boolean(isSuperAdmin && impersonatedClinicId && impersonatedClinicId !== user?.originalClinicId);
+
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      loginWithGoogle, 
+      logout,
+      isSuperAdmin,
+      activeClinicId: user?.clinicId || null,
+      activeClinicName: impersonatedClinicName,
+      isImpersonating,
+      switchClinic,
+      resetToMyClinic
+    }}>
       {children}
     </AuthContext.Provider>
   );

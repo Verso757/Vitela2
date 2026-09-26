@@ -6,16 +6,20 @@ import {
   FileText, 
   Settings, 
   Bell, 
-  Search,
-  Menu,
-  ShieldAlert,
-  PieChart,
-  LogOut,
-  User as UserIcon,
-  Loader2,
-  Package,
-  Target,
-  DollarSign
+  Search, 
+  Menu, 
+  ShieldAlert, 
+  PieChart, 
+  LogOut, 
+  User as UserIcon, 
+  Loader2, 
+  Package, 
+  Target, 
+  DollarSign,
+  ShieldCheck,
+  Building2,
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,7 +39,7 @@ import { useAuth } from "../../contexts/AuthContext";
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, isSuperAdmin, isImpersonating, activeClinicName, resetToMyClinic } = useAuth();
 
   if (loading) {
     return (
@@ -58,15 +62,26 @@ export default function DashboardLayout() {
     <div className="flex min-h-screen bg-[#f5f5f5] text-slate-900 font-sans">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-col bg-white border-r border-slate-200 shadow-sm z-10">
-        <div className="p-6 flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-xl text-white">
-            <Activity className="h-6 w-6" />
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-xl text-white">
+              <Activity className="h-6 w-6" />
+            </div>
+            <div>
+              <span className="text-xl font-bold tracking-tight text-slate-900 block leading-tight">Vitela</span>
+              {isSuperAdmin && (
+                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                  SuperAdmin
+                </span>
+              )}
+            </div>
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">Vitela</span>
         </div>
+
         <nav className="flex-1 overflow-y-auto px-4 space-y-1 mt-2 pb-4">
           <NavLinks />
         </nav>
+
         <div className="p-4 border-t border-slate-200">
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-3 px-2 py-2 w-full text-left rounded-lg hover:bg-slate-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
@@ -75,12 +90,23 @@ export default function DashboardLayout() {
               </Avatar>
               <div className="flex flex-col flex-1 min-w-0">
                 <span className="text-sm font-medium leading-none truncate text-slate-900">{user?.name}</span>
-                <span className="text-xs text-slate-500 mt-1 truncate capitalize">{user?.role === "doctor" ? "Doctor" : user?.role === "owner" ? "Propietario / Admin" : "Asistente"}</span>
+                <span className="text-xs text-slate-500 mt-1 truncate capitalize">
+                  {isSuperAdmin ? "Super Admin SaaS" : user?.role === "doctor" ? "Doctor" : user?.role === "owner" ? "Propietario / Admin" : "Asistente"}
+                </span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 rounded-xl shadow-lg border-slate-200">
               <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {isSuperAdmin && (
+                <>
+                  <DropdownMenuItem onClick={() => navigate("/admin")} className="font-medium text-indigo-700 bg-indigo-50/60 focus:bg-indigo-100">
+                    <ShieldCheck className="mr-2 h-4 w-4 text-indigo-600" />
+                    <span>Panel Maestro SaaS</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem onClick={() => navigate("/configuracion")}>
                 <UserIcon className="mr-2 h-4 w-4" />
                 <span>Perfil</span>
@@ -100,6 +126,39 @@ export default function DashboardLayout() {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Impersonation Banner for SuperAdmin */}
+        {isImpersonating && (
+          <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs md:text-sm font-medium flex flex-wrap items-center justify-between gap-2 shadow-sm border-b border-amber-600 shrink-0 z-20">
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-900 text-amber-100 text-[10px] uppercase font-black px-2 py-0.5 rounded tracking-wider shrink-0">
+                Modo Soporte / Impersonación
+              </span>
+              <span>
+                Administrando la clínica: <strong>{activeClinicName || "Clínica Cliente"}</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                onClick={() => navigate("/admin")} 
+                className="h-7 text-xs bg-slate-900 text-white hover:bg-slate-800"
+              >
+                Ir al Panel Maestro
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={resetToMyClinic} 
+                className="h-7 text-xs bg-white text-slate-900 hover:bg-amber-100 border-amber-400"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Volver a mi Consultorio
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center">
@@ -130,7 +189,9 @@ export default function DashboardLayout() {
                     </Avatar>
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-sm font-semibold text-slate-900 truncate">{user?.name}</span>
-                      <span className="text-xs text-slate-500 truncate capitalize">{user?.role === "owner" ? "Propietario / Admin" : user?.role}</span>
+                      <span className="text-xs text-slate-500 truncate capitalize">
+                        {isSuperAdmin ? "Super Admin SaaS" : user?.role === "owner" ? "Propietario / Admin" : user?.role}
+                      </span>
                     </div>
                   </div>
                   <Button 
@@ -157,6 +218,18 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isSuperAdmin && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate("/admin")} 
+                className="text-xs font-semibold bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hidden sm:flex items-center gap-1.5"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Panel Maestro
+              </Button>
+            )}
+
             <Button variant="ghost" size="icon" className="relative text-slate-500 hover:text-slate-900 rounded-full">
               <Bell className="h-5 w-5" />
               <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
@@ -176,9 +249,20 @@ export default function DashboardLayout() {
                 <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-slate-200">
                   <DropdownMenuLabel>
                     <div className="font-semibold text-slate-900 truncate">{user?.name}</div>
-                    <div className="text-xs text-slate-500 mt-0.5 truncate capitalize">{user?.role === "owner" ? "Propietario / Admin" : user?.role}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 truncate capitalize">
+                      {isSuperAdmin ? "Super Admin SaaS" : user?.role === "owner" ? "Propietario / Admin" : user?.role}
+                    </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {isSuperAdmin && (
+                    <>
+                      <DropdownMenuItem onClick={() => navigate("/admin")} className="font-medium text-indigo-700 bg-indigo-50/60 focus:bg-indigo-100">
+                        <ShieldCheck className="mr-2 h-4 w-4 text-indigo-600" />
+                        <span>Panel Maestro SaaS</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => navigate("/configuracion")}>
                     <UserIcon className="mr-2 h-4 w-4" />
                     <span>Perfil y Ajustes</span>
@@ -209,7 +293,7 @@ export default function DashboardLayout() {
 
 function NavLinks({ onClick }: { onClick?: () => void }) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   
   const links = [
     { name: "Dashboard", path: "/dashboard", icon: Activity, roles: ["doctor", "assistant", "admin"] },
@@ -224,6 +308,31 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
 
   return (
     <div className="space-y-1 py-2">
+      {/* Super Admin Master Link */}
+      {isSuperAdmin && (
+        <div className="mb-3 pb-2 border-b border-slate-100">
+          <Link
+            to="/admin"
+            onClick={onClick}
+            className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-semibold ${
+              location.pathname.startsWith("/admin")
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className={`h-4.5 w-4.5 ${location.pathname.startsWith("/admin") ? "text-white" : "text-indigo-600"}`} />
+              <span>Panel Maestro</span>
+            </div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+              location.pathname.startsWith("/admin") ? "bg-white/20 text-white" : "bg-indigo-200/70 text-indigo-800"
+            }`}>
+              SaaS
+            </span>
+          </Link>
+        </div>
+      )}
+
       {links.map((link) => {
         if (user && !link.roles.includes(user.role) && user.role !== "owner") return null;
         
@@ -249,3 +358,4 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
     </div>
   );
 }
+
