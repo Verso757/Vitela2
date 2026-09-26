@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "Clinic": {
+      "title": "Clinic",
+      "description": "A medical clinic or practice.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "contactEmail": { "type": "string" }
+      },
+      "required": ["name", "ownerId", "contactEmail"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "A member of a clinic.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["owner", "assistant"] },
+        "email": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["role", "email", "name"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "A patient of a clinic.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "edad": { "type": "number" },
+        "sexo": { "type": "string" },
+        "tel": { "type": "string" },
+        "rfc": { "type": "string" },
+        "sangre": { "type": "string" },
+        "peso": { "type": "string" },
+        "altura": { "type": "string" },
+        "presion": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "An appointment for a patient.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["patientId", "date", "time", "status"]
+    },
+    "Record": {
+      "title": "Record",
+      "description": "A medical record, note, or prescription.",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["nota", "receta"] },
+        "content": { "type": "string" },
+        "date": { "type": "string" },
+        "authorId": { "type": "string" }
+      },
+      "required": ["patientId", "type", "content", "date", "authorId"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Income / payment record for a clinic.",
+      "type": "object",
+      "properties": {
+        "paciente": { "type": "string" },
+        "monto": { "type": "number" },
+        "fecha": { "type": "string" },
+        "estado": { "type": "string" },
+        "metodoPago": { "type": "string" },
+        "concepto": { "type": "string" },
+        "notas": { "type": "string" }
+      },
+      "required": ["paciente", "monto", "fecha", "estado", "metodoPago"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Global user profile to track clinic membership.",
+      "type": "object",
+      "properties": {
+        "clinicId": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "assistant", "doctor"] },
+        "email": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["clinicId", "role", "email", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Global user directory"
+    },
+    "/clinics/{clinicId}": {
+      "schema": { "$ref": "#/entities/Clinic" },
+      "description": "Clinics"
+    },
+    "/clinics/{clinicId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/Member" },
+      "description": "Clinic members"
+    },
+    "/clinics/{clinicId}/patients/{patientId}": {
+      "schema": { "$ref": "#/entities/Patient" },
+      "description": "Clinic patients"
+    },
+    "/clinics/{clinicId}/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Clinic appointments"
+    },
+    "/clinics/{clinicId}/records/{recordId}": {
+      "schema": { "$ref": "#/entities/Record" },
+      "description": "Clinic records"
+    },
+    "/clinics/{clinicId}/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Clinic income and payment records"
+    }
+  }
+}

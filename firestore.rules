@@ -1,0 +1,243 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} { allow read, write: if false; }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    // NOTE: disabling email_verified strict check because some testing environments don't support it reliably, but typically we would mandate it.
+    // I will use email_verified == true as requested. Wait, if user logs in with Google in standard Firebase auth, it is true.
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    
+    function isClinicOwner(clinicId) {
+      return isSignedIn() && get(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function isClinicMember(clinicId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid));
+    }
+
+    function isValidClinic(data) {
+      return data.keys().hasAll(['name', 'ownerId', 'contactEmail']) 
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.ownerId is string && data.ownerId == request.auth.uid
+          && data.contactEmail is string && data.contactEmail.size() <= 100
+          && (!data.keys().hasAny(['rfc']) || (data.rfc is string && data.rfc.size() <= 20))
+          && (!data.keys().hasAny(['regimen']) || (data.regimen is string && data.regimen.size() <= 100))
+          && (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 255));
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['role', 'email', 'name'])
+          && data.role is string && (data.role == 'owner' || data.role == 'assistant')
+          && data.email is string && data.email.size() <= 100
+          && data.name is string && data.name.size() <= 100;
+    }
+
+    function isValidPatient(data) {
+      return data.keys().hasAll(['name'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && (!data.keys().hasAny(['edad']) || data.edad is number)
+          && (!data.keys().hasAny(['sexo']) || (data.sexo is string && data.sexo.size() <= 10))
+          && (!data.keys().hasAny(['tel']) || (data.tel is string && data.tel.size() <= 20))
+          && (!data.keys().hasAny(['rfc']) || (data.rfc is string && data.rfc.size() <= 20))
+          && (!data.keys().hasAny(['sangre']) || (data.sangre is string && data.sangre.size() <= 10))
+          && (!data.keys().hasAny(['peso']) || (data.peso is string && data.peso.size() <= 20))
+          && (!data.keys().hasAny(['altura']) || (data.altura is string && data.altura.size() <= 20))
+          && (!data.keys().hasAny(['presion']) || (data.presion is string && data.presion.size() <= 20));
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['patientId', 'date', 'time', 'status'])
+          && data.patientId is string && isValidId(data.patientId)
+          && data.date is string && data.date.size() <= 20
+          && data.time is string && data.time.size() <= 10
+          && data.status is string && data.status.size() <= 20
+          && (!data.keys().hasAny(['type']) || (data.type is string && data.type.size() <= 50));
+    }
+
+    function isValidRecord(data) {
+      return data.keys().hasAll(['patientId', 'type', 'content', 'date', 'authorId'])
+          && data.patientId is string && isValidId(data.patientId)
+          && data.type is string && (data.type == 'nota' || data.type == 'receta')
+          && data.content is string && data.content.size() <= 50000 
+          && data.date is string && data.date.size() <= 30
+          && data.authorId is string && data.authorId == request.auth.uid;
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll(['paciente', 'monto', 'fecha', 'estado', 'metodoPago'])
+          && data.paciente is string && data.paciente.size() <= 100
+          && data.monto is number
+          && data.fecha is string && data.fecha.size() <= 35
+          && data.estado is string && data.estado.size() <= 25
+          && data.metodoPago is string && data.metodoPago.size() <= 40
+          && (!data.keys().hasAny(['concepto']) || (data.concepto is string && data.concepto.size() <= 200))
+          && (!data.keys().hasAny(['notas']) || (data.notas is string && data.notas.size() <= 500))
+          && (!data.keys().hasAny(['rfc']) || (data.rfc is string && data.rfc.size() <= 20))
+          && (!data.keys().hasAny(['usoCFDI']) || (data.usoCFDI is string && data.usoCFDI.size() <= 50))
+          && (!data.keys().hasAny(['cfdiFolio']) || (data.cfdiFolio is string || data.cfdiFolio is number))
+          && (!data.keys().hasAny(['cfdiUuid']) || (data.cfdiUuid is string));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['clinicId', 'role', 'email', 'name'])
+          && data.clinicId is string && isValidId(data.clinicId)
+          && data.role is string && (data.role == 'owner' || data.role == 'assistant' || data.role == 'doctor')
+          && data.email is string && data.email.size() <= 100
+          && data.name is string && data.name.size() <= 100
+          && (!data.keys().hasAny(['cedulaProfesional']) || (data.cedulaProfesional is string && data.cedulaProfesional.size() <= 50))
+          && (!data.keys().hasAny(['cedulaEspecialidad']) || (data.cedulaEspecialidad is string && data.cedulaEspecialidad.size() <= 50))
+          && (!data.keys().hasAny(['specialty']) || (data.specialty is string && data.specialty.size() <= 100));
+    }
+
+    match /demo_requests/{requestId} {
+      allow create: if true;
+      allow get, list, update, delete: if isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner";
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && userId == request.auth.uid;
+      allow list: if false; // Users can only be gotten individually
+      allow create: if isSignedIn() 
+                    && userId == request.auth.uid 
+                    && isValidId(userId)
+                    && isValidUser(incoming())
+                    && incoming().email == request.auth.token.email;
+      allow update: if isSignedIn() 
+                    && userId == request.auth.uid
+                    && isValidUser(incoming())
+                    && incoming().email == existing().email 
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['clinicId', 'role', 'name', 'cedulaProfesional', 'cedulaEspecialidad', 'specialty']);
+    }
+
+    match /clinics/{clinicId} {
+      allow get: if true; // Allow public to read clinic basic info
+      allow list: if isClinicMember(clinicId) && existing().ownerId == request.auth.uid; // Must restrict explicit list evaluation
+      allow create: if isSignedIn()
+                    && isValidId(clinicId) 
+                    && isValidClinic(incoming());
+      allow update: if isClinicOwner(clinicId)
+                    && isValidClinic(incoming())
+                    && incoming().ownerId == existing().ownerId
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'contactEmail', 'rfc', 'regimen', 'address']);
+                    
+      match /public_requests/{requestId} {
+        allow create: if isValidId(requestId) 
+                      && incoming().keys().hasAll(['name', 'phone', 'reason', 'date', 'time', 'status', 'createdAt'])
+                      && incoming().name is string && incoming().name.size() <= 100
+                      && incoming().phone is string && incoming().phone.size() <= 20
+                      && incoming().reason is string && incoming().reason.size() <= 1000
+                      && incoming().date is string && incoming().date.size() <= 20
+                      && incoming().time is string && incoming().time.size() <= 10
+                      && incoming().status is string && incoming().status == 'pending'
+                      && incoming().createdAt == request.time;
+        allow get, list, update, delete: if isClinicMember(clinicId);
+      }
+                    
+      match /members/{memberId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        // Note: The initial creator of the clinic needs to make themselves an owner before they become an owner of the clinic, hence the OR condition 
+        allow create: if (isClinicOwner(clinicId) || (memberId == request.auth.uid && incoming().role == 'owner' && incoming().email == request.auth.token.email))
+                      && isValidId(memberId)
+                      && isValidMember(incoming())
+                      && incoming().keys().size() == 3;
+        allow update: if isClinicOwner(clinicId)
+                      && isValidMember(incoming())
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name']);
+        allow delete: if isClinicOwner(clinicId) && memberId != request.auth.uid;
+      }
+      
+      match /patients/{patientId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(patientId)
+                      && isValidPatient(incoming());
+        allow update: if isClinicMember(clinicId)
+                      && isValidPatient(incoming())
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'edad', 'sexo', 'tel', 'rfc', 'sangre', 'peso', 'altura', 'presion']);
+                      
+        match /messages/{messageId} {
+          allow read: if true;
+          allow create: if isValidId(messageId)
+                        && incoming().keys().hasAll(['text', 'sender', 'createdAt'])
+                        && incoming().text is string && incoming().text.size() <= 2000
+                        && incoming().sender is string && (incoming().sender == 'doctor' || incoming().sender == 'patient')
+                        && incoming().createdAt == request.time;
+        }
+      }
+      
+      match /appointments/{appointmentId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(appointmentId)
+                      && isValidAppointment(incoming())
+                      && exists(/databases/$(database)/documents/clinics/$(clinicId)/patients/$(incoming().patientId));
+        allow update: if isClinicMember(clinicId)
+                      && isValidAppointment(incoming())
+                      && incoming().patientId == existing().patientId
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'time', 'status', 'type']);
+      }
+
+      match /records/{recordId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(recordId)
+                      && isValidRecord(incoming())
+                      && exists(/databases/$(database)/documents/clinics/$(clinicId)/patients/$(incoming().patientId));
+        allow update: if isClinicMember(clinicId)
+                      && isValidRecord(incoming())
+                      && incoming().authorId == existing().authorId
+                      && incoming().patientId == existing().patientId
+                      && incoming().type == existing().type
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['content', 'date']);
+      }
+
+      match /inventory/{itemId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(itemId)
+                      && incoming().keys().hasAll(['nombre', 'cantidad', 'minimo', 'categoria'])
+                      && incoming().cantidad is number
+                      && incoming().minimo is number;
+        allow update: if isClinicMember(clinicId)
+                      && incoming().keys().hasAll(['nombre', 'cantidad', 'minimo', 'categoria'])
+                      && incoming().cantidad is number
+                      && incoming().minimo is number;
+      }
+
+      match /invoices/{invoiceId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(invoiceId)
+                      && isValidInvoice(incoming());
+        allow update: if isClinicMember(clinicId)
+                      && isValidInvoice(incoming())
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['estado', 'notas', 'metodoPago', 'concepto', 'cfdiFolio', 'cfdiUuid']);
+        allow delete: if isClinicMember(clinicId);
+      }
+
+      match /insurances/{insuranceId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(insuranceId)
+                      && incoming().keys().hasAll(['nombre', 'estado'])
+                      && incoming().nombre is string;
+        allow update: if isClinicMember(clinicId)
+                      && incoming().keys().hasAll(['nombre', 'estado'])
+                      && incoming().nombre is string;
+        allow delete: if isClinicMember(clinicId);
+      }
+    }
+  }
+}

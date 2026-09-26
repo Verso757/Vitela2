@@ -1,0 +1,21 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Block aggressive AI bots and scrapers at server level (reduces CPU/Memory spikes)
+  RewriteCond %{HTTP_USER_AGENT} (ClaudeBot|anthropic-ai|GPTBot|ChatGPT-User|CCBot|Bytespider|Amazonbot|FacebookBot|cohere-ai|PerplexityBot) [NC]
+  RewriteRule .* - [F,L]
+
+  # 2. Serve static files directly if they exist
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. Explicitly allow robots.txt and sitemap.xml without SPA rewriting
+  RewriteRule ^robots\.txt$ robots.txt [L]
+  RewriteRule ^sitemap\.xml$ sitemap.xml [L]
+
+  # 4. SPA rewrite for client-side routing
+  RewriteRule ^index\.html$ - [L]
+  RewriteRule . /index.html [L]
+</IfModule>
